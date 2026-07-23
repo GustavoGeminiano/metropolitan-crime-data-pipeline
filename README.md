@@ -17,7 +17,7 @@ This project processes over 99 raw, unorganized Excel spreadsheets into a unifie
 ## 📊 Interactive Dashboard
 
 You can explore the live, interactive Power BI dashboard here:
-👉 **[View Live Power BI Dashboard](https://www.ssp.sp.gov.br/estatistica/dados-mensais)**
+👉 **[View Live Power BI Dashboard](https://fatecspgov-my.sharepoint.com/:u:/g/personal/adriane_santos3_fatec_sp_gov_br/ER8GHVc31ypJmIvCfbV9j5UB9shFnAUlnsmWgg9w9Mt5nw?e=gOrRSs)**
 
 ---
 
