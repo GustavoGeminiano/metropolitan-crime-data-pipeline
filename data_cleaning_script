@@ -1,0 +1,132 @@
+import os
+import pandas as pd
+import re
+
+# File Paths
+INPUT_FOLDER = r"./data/raw"
+OUTPUT_FILE = r"./data/processed/Final_Crime_Table.xlsx"
+
+# Target Crime Categories (Uppercase, normalized)
+KEPT_CRIMES = [
+    "HOMICÍDIO DOLOSO",
+    "TENTATIVA DE HOMICÍDIO",
+    "LESÃO CORPORAL SEGUIDA DE MORTE",
+    "LESÃO CORPORAL DOLOSA",
+    "LATROCÍNIO",
+    "ESTUPRO",
+    "ESTUPRO DE VULNERÁVEL",
+    "ROUBO - OUTROS",
+    "ROUBO DE VEÍCULO",
+    "ROUBO A BANCO",
+    "ROUBO DE CARGA",
+    "FURTO - OUTROS",
+    "FURTO DE VEÍCULO"
+]
+
+# Month mapping & ordering (Handles variations like "MARCO" without cedilla)
+MONTHS_MAP = {
+    "JANEIRO": "Jan", "FEVEREIRO": "Fev", "MARÇO": "Mar", "MARCO": "Mar",
+    "ABRIL": "Abr", "MAIO": "Mai", "JUNHO": "Jun", "JULHO": "Jul",
+    "AGOSTO": "Ago", "SETEMBRO": "Set", "OUTUBRO": "Out", "NOVEMBRO": "Nov", "DEZEMBRO": "Dez"
+}
+MONTH_ORDER = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
+
+def clean_crime_name(name: str) -> str:
+    """Standardizes crime names by converting to uppercase and removing parenthesis content."""
+    s = str(name).strip().upper()
+    s = re.sub(r"\s*\(.*?\)", "", s)
+    return s.strip()
+
+def abbreviate_month(month: str) -> str:
+    """Converts full month strings into standard 3-letter abbreviations."""
+    if pd.isna(month):
+        return month
+    key = str(month).strip().upper()
+    return MONTHS_MAP.get(key, key[:3].capitalize() if len(key) >= 3 else key)
+
+all_rows = []
+
+if os.path.exists(INPUT_FOLDER):
+    files = [f for f in os.listdir(INPUT_FOLDER) if f.lower().endswith((".xlsx", ".xls"))]
+else:
+    files = []
+
+if not files:
+    print("No .xlsx/.xls files found in input directory.")
+
+for file in files:
+    file_path = os.path.join(INPUT_FOLDER, file)
+    print("Processing file:", file)
+
+    # Infer city and year from filename structure
+    name_no_ext = os.path.splitext(file)[0]
+    match_year = re.search(r"(\d{2})$", name_no_ext)
+    year = int("20" + match_year.group(1)) if match_year else None
+    city = re.sub(r"\d{2}$", "", name_no_ext).strip()
+
+    try:
+        df = pd.read_excel(file_path, engine="openpyxl")
+    except Exception as e:
+        print(f"  ⚠️ Failed to read {file}: {e}. Skipping.")
+        continue
+
+    # Standardize column headers
+    df.columns = [str(c).strip() for c in df.columns]
+
+    # Identify primary crime nature column
+    nature_col = df.columns[0]
+
+    # Remove total/summary columns
+    cols = [c for c in df.columns if "TOTAL" not in str(c).upper()]
+    df = df[cols]
+
+    # Clean crime names in the primary column
+    df[nature_col] = df[nature_col].apply(clean_crime_name)
+
+    # Identify month columns
+    month_cols = [c for c in df.columns if c != nature_col]
+    if not month_cols:
+        print(f"  ⚠️ File {file} has no detected month columns. Skipping.")
+        continue
+
+    # Replace placeholders
+    df = df.replace("...", pd.NA)
+
+    # Unpivot DataFrame from wide to long format
+    df_long = df.melt(id_vars=[nature_col], value_vars=month_cols, var_name="Month", value_name="Quantity")
+
+    # Standardize crime nature
+    df_long["Crime Nature"] = df_long[nature_col].apply(clean_crime_name)
+
+    # Filter for target crime list
+    df_long = df_long[df_long["Crime Nature"].isin(KEPT_CRIMES)].copy()
+
+    # Standardize months
+    df_long["Month"] = df_long["Month"].apply(abbreviate_month)
+
+    # Convert counts to integer
+    df_long["Quantity"] = pd.to_numeric(df_long["Quantity"], errors="coerce").fillna(0).astype(int)
+
+    # Inject metadata
+    df_long["City"] = city
+    df_long["Year"] = year
+
+    # Reorder columns
+    df_long = df_long[["Crime Nature", "City", "Year", "Month", "Quantity"]]
+
+    all_rows.append(df_long)
+
+# Concatenate all processed datasets
+if all_rows:
+    result = pd.concat(all_rows, ignore_index=True)
+
+    # Enforce categorical month ordering
+    result["Month"] = pd.Categorical(result["Month"], categories=MONTH_ORDER, ordered=True)
+
+    # Sort dataset
+    result = result.sort_values(by=["City", "Year", "Crime Nature", "Month"]).reset_index(drop=True)
+
+    # Export final dataset
+    os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
+    result.to_excel(OUTPUT_FILE, index=False)
+    print("Consolidated file saved successfully to:", OUTPUT_FILE)
