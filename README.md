@@ -14,6 +14,13 @@ This project processes over 99 raw, unorganized Excel spreadsheets into a unifie
 
 ---
 
+## 📊 Interactive Dashboard
+
+You can explore the live, interactive Power BI dashboard here:
+👉 **[View Live Power BI Dashboard](https://www.ssp.sp.gov.br/estatistica/dados-mensais)**
+
+---
+
 ## 🛠️ Tech Stack & Architecture
 
 * **Data Extraction & ETL:** Python (`pandas`, `openpyxl`, `re`)
